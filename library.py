@@ -2,18 +2,33 @@ import os
 from dotenv import load_dotenv
 import mysql.connector as mys
 from mysql.connector import Error
+from datetime import date, timedelta
 
+# =========================================================
 # LOAD ENVIRONMENT VARIABLES
+# =========================================================
+
 load_dotenv()
 
+# =========================================================
+# CONSTANTS
+# =========================================================
+
+LOAN_DAYS = 7
+FINE_PER_DAY = 5
+
+# =========================================================
 # DATABASE CONNECTION
+# =========================================================
+
 try:
 
     mycon = mys.connect(
         host=os.getenv("DB_HOST"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME")
+        database=os.getenv("DB_NAME"),
+        autocommit=False
     )
 
     mycur = mycon.cursor(buffered=True)
@@ -43,6 +58,12 @@ def pause():
     input("\nPress ENTER to continue...")
 
 
+def clear_transaction():
+
+    if mycon.in_transaction:
+        mycon.rollback()
+
+
 def print_rows(headers, rows, widths):
 
     total = sum(widths)
@@ -61,7 +82,6 @@ def print_rows(headers, rows, widths):
             print(f"{str(value):<{width}}", end="")
 
         print()
-
 
 # =========================================================
 # SEARCH BOOK
@@ -164,7 +184,7 @@ def search_book():
                         )
                         THEN 'Issued'
                         ELSE 'Available'
-                    END
+                    END AS status
                 FROM books b
                 WHERE b.id = %s
                 """
@@ -188,7 +208,7 @@ def search_book():
                         )
                         THEN 'Issued'
                         ELSE 'Available'
-                    END
+                    END AS status
                 FROM books b
                 WHERE b.name LIKE %s
                 """
@@ -200,7 +220,7 @@ def search_book():
             if data:
 
                 headers = ["ID", "BOOK NAME", "AUTHOR", "STATUS"]
-                widths = [10, 40, 40, 25]
+                widths = [10, 40, 40, 30]
 
                 print_rows(headers, data, widths)
 
@@ -211,7 +231,6 @@ def search_book():
             print("Error:", e)
 
         line()
-
 
 # =========================================================
 # SEARCH USER
@@ -318,7 +337,6 @@ def search_user():
 
         line()
 
-
 # =========================================================
 # ISSUE BOOK
 # =========================================================
@@ -346,14 +364,13 @@ def issue_book():
 
         try:
 
-            mycon.start_transaction()
+            clear_transaction()
 
-            # LOCK BOOK ROW
+            # CHECK BOOK EXISTS
             query = """
             SELECT id
             FROM books
             WHERE id = %s
-            FOR UPDATE
             """
 
             mycur.execute(query, (int(book_id),))
@@ -361,11 +378,10 @@ def issue_book():
 
             if not book:
                 print("Book Does Not Exist.")
-                mycon.rollback()
                 line()
                 continue
 
-            # CHECK IF ALREADY ISSUED
+            # CHECK IF BOOK IS ALREADY ISSUED
             query = """
             SELECT 1
             FROM issued_books
@@ -377,11 +393,10 @@ def issue_book():
 
             if mycur.fetchone():
                 print("Book Already Issued.")
-                mycon.rollback()
                 line()
                 continue
 
-            # CHECK USER
+            # CHECK USER EXISTS
             query = """
             SELECT id
             FROM users
@@ -393,14 +408,13 @@ def issue_book():
 
             if not user:
                 print("User Does Not Exist.")
-                mycon.rollback()
                 line()
                 continue
 
             issue_date = date.today()
             due_date = issue_date + timedelta(days=LOAN_DAYS)
 
-            # ISSUE BOOK
+            # INSERT ISSUE RECORD
             query = """
             INSERT INTO issued_books(
                 user_id,
@@ -427,11 +441,11 @@ def issue_book():
             print("Due Date:", due_date)
 
         except Error as e:
+
             mycon.rollback()
             print("Error:", e)
 
         line()
-
 
 # =========================================================
 # RETURN BOOK
@@ -455,14 +469,13 @@ def return_book():
 
         try:
 
-            mycon.start_transaction()
+            clear_transaction()
 
             query = """
             SELECT issue_id, due_date
             FROM issued_books
             WHERE book_id = %s
             AND return_date IS NULL
-            FOR UPDATE
             """
 
             mycur.execute(query, (int(book_id),))
@@ -470,7 +483,6 @@ def return_book():
 
             if not data:
                 print("Book Was Not Issued.")
-                mycon.rollback()
                 line()
                 continue
 
@@ -502,11 +514,11 @@ def return_book():
                 print(f"Late Fine : ₹{fine}")
 
         except Error as e:
+
             mycon.rollback()
             print("Error:", e)
 
         line()
-
 
 # =========================================================
 # ADD BOOK
@@ -567,7 +579,6 @@ def add_book():
 
         line()
 
-
 # =========================================================
 # ADD USER
 # =========================================================
@@ -621,7 +632,6 @@ def add_user():
 
         line()
 
-
 # =========================================================
 # DELETE BOOK
 # =========================================================
@@ -669,7 +679,6 @@ def delete_book():
         print("Error:", e)
 
     line()
-
 
 # =========================================================
 # DELETE USER
@@ -719,7 +728,6 @@ def delete_user():
 
     line()
 
-
 # =========================================================
 # MAIN MENU
 # =========================================================
@@ -765,7 +773,6 @@ def main_menu():
             print("Invalid Choice.")
 
         pause()
-
 
 # =========================================================
 # START PROGRAM
