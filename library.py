@@ -1,390 +1,787 @@
+import os
+from dotenv import load_dotenv
 import mysql.connector as mys
+from mysql.connector import Error
+
+# LOAD ENVIRONMENT VARIABLES
+load_dotenv()
 
 # DATABASE CONNECTION
-mycon = mys.connect(
-    host='HOST',
-    user='USERNAME',
-    password='YOUR PASSWORD',
-    database='LIBRARY_MANAGEMENT_SYSTEM'
-)
+try:
 
-mycur = mycon.cursor(buffered=True)
+    mycon = mys.connect(
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME")
+    )
+
+    mycur = mycon.cursor(buffered=True)
+
+    if mycon.is_connected():
+        print("\nDatabase Connected Successfully.\n")
+
+except Error as e:
+    print("Database Connection Error:", e)
+    exit()
+
+# =========================================================
+# HELPER FUNCTIONS
+# =========================================================
+
+def line():
+    print("." * 120)
 
 
-# FUNCTION FOR SEARCHING A BOOK
+def heading(title):
+    print("\n" + "=" * 120)
+    print(title.center(120))
+    print("=" * 120)
+
+
+def pause():
+    input("\nPress ENTER to continue...")
+
+
+def print_rows(headers, rows, widths):
+
+    total = sum(widths)
+
+    print("-" * total)
+
+    for header, width in zip(headers, widths):
+        print(f"{header:<{width}}", end="")
+
+    print()
+    print("-" * total)
+
+    for row in rows:
+
+        for value, width in zip(row, widths):
+            print(f"{str(value):<{width}}", end="")
+
+        print()
+
+
+# =========================================================
+# SEARCH BOOK
+# =========================================================
+
 def search_book():
 
-    a = input(
-        "Enter Book ID or Book Name : \n"
-        "#      '*' to see all books      # \n"
-        "# '$' to see all available books # \n"
-        "#  '$$' to see all issued books  # \n"
-    )
+    heading("BOOK SEARCH MENU")
 
     while True:
 
-        if a.upper() == 'EXIT':
+        a = input(
+            "\nEnter Book ID or Book Name\n"
+            "*   -> Show All Books\n"
+            "$   -> Available Books\n"
+            "$$  -> Issued Books\n"
+            "EXIT -> Main Menu\n\n"
+            "Enter Choice : "
+        ).strip()
+
+        if a.upper() == "EXIT":
             break
 
-        elif a == '*':
-            query = "select * from books"
+        try:
 
-        elif a == '$':
-            query = "select * from books where issued_to IS NULL"
-
-        elif a == '$$':
-            query = "select * from books where issued_to IS NOT NULL"
-
-        elif a.isnumeric():
-            query = "select * from books where id = {}".format(int(a))
-
-        else:
-            query = "select * from books where name = '{}'".format(a)
-
-        mycur.execute(query)
-        dt = mycur.fetchall()
-
-        if dt != []:
-
-            print('-' * 130)
-            print('%5s' % 'ID',
-                  '%30s' % 'Name',
-                  '%30s' % "Author Name",
-                  '%20s' % 'Issued To')
-
-            print('-' * 130)
-
-            for R in dt:
-                print('%5s' % R[0],
-                      '%30s' % R[1],
-                      '%30s' % R[2],
-                      '%20s' % R[3])
-
-            break
-
-        else:
-            print('No such book found.\n')
-            print('.' * 85)
-            a = input('Enter a valid Book ID or Book Name : ')
-
-
-# FUNCTION TO SEARCH USER
-def search_user():
-
-    a = input(
-        'Enter User ID or User Name : \n'
-        "#             '*' to see all users              # \n"
-        "# '$' to see all users who haven’t issued books # \n"
-        "#  '$$' to see all users who have issued books  # \n"
-    )
-
-    while True:
-
-        if a.upper() == 'EXIT':
-            break
-
-        elif a == '*':
-            query = "select * from users"
-
-        elif a == '$':
-            query = "select * from users where books_assigned IS NULL"
-
-        elif a == '$$':
-            query = "select * from users where books_assigned IS NOT NULL"
-
-        elif a.isnumeric():
-            query = "select * from users where id = {}".format(int(a))
-
-        else:
-            query = "select * from users where name = '{}'".format(a)
-
-        mycur.execute(query)
-        dt = mycur.fetchall()
-
-        if dt != []:
-
-            print('-' * 100)
-            print('%5s' % 'ID',
-                  '%30s' % 'Name',
-                  '%20s' % 'Phone Number',
-                  '%20s' % 'Books Assigned')
-
-            print('-' * 100)
-
-            for R in dt:
-                print('%5s' % R[0],
-                      '%30s' % R[1],
-                      '%20s' % R[2],
-                      '%20s' % R[3])
-
-            break
-
-        else:
-            print('No such User found.\n')
-            print('.' * 85)
-            a = input('Enter a Valid User ID or User Name : ')
-
-
-# FUNCTION FOR ISSUING A BOOK
-def issue_book():
-
-    while True:
-
-        a = input('Enter Book ID : ')
-
-        if a.upper() == 'EXIT':
-            break
-
-        b = input('Enter User ID : ')
-
-        if b.upper() == 'EXIT':
-            break
-
-        query = "select id from books where issued_to IS NULL"
-        mycur.execute(query)
-        dt = mycur.fetchall()
-
-        query = "select id from users where books_assigned IS NULL"
-        mycur.execute(query)
-        ut = mycur.fetchall()
-
-        if a.isnumeric() and b.isnumeric():
-
-            if (int(a),) in dt and (int(b),) in ut:
-
-                query = "update books set issued_to = {} where id = {}".format(int(b), int(a))
-                mycur.execute(query)
-
-                query = "update users set books_assigned = {} where id = {}".format(int(a), int(b))
-                mycur.execute(query)
-
-                mycon.commit()
+            # SHOW ALL BOOKS
+            if a == "*":
 
                 query = """
-                select books.name, users.name
-                from books, users
-                where books.issued_to = users.id
-                and books.id = {}
-                """.format(a)
+                SELECT
+                    b.id,
+                    b.name,
+                    b.author,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM issued_books ib
+                            WHERE ib.book_id = b.id
+                            AND ib.return_date IS NULL
+                        )
+                        THEN 'Issued'
+                        ELSE 'Available'
+                    END AS status
+                FROM books b
+                """
 
                 mycur.execute(query)
-                dt = mycur.fetchone()
 
-                print(dt[0], 'is Issued to', dt[1])
-                print('.' * 85)
+            # AVAILABLE BOOKS
+            elif a == "$":
 
-            elif (int(b),) not in ut:
+                query = """
+                SELECT
+                    b.id,
+                    b.name,
+                    b.author,
+                    'Available'
+                FROM books b
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM issued_books ib
+                    WHERE ib.book_id = b.id
+                    AND ib.return_date IS NULL
+                )
+                """
 
-                print('User either not present or already has a book.')
-                print('.' * 85)
+                mycur.execute(query)
 
+            # ISSUED BOOKS
+            elif a == "$$":
+
+                query = """
+                SELECT
+                    b.id,
+                    b.name,
+                    b.author,
+                    CONCAT('Issued To User ID ', ib.user_id)
+                FROM books b
+                JOIN issued_books ib
+                    ON b.id = ib.book_id
+                WHERE ib.return_date IS NULL
+                """
+
+                mycur.execute(query)
+
+            # SEARCH BY ID
+            elif a.isdigit():
+
+                query = """
+                SELECT
+                    b.id,
+                    b.name,
+                    b.author,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM issued_books ib
+                            WHERE ib.book_id = b.id
+                            AND ib.return_date IS NULL
+                        )
+                        THEN 'Issued'
+                        ELSE 'Available'
+                    END
+                FROM books b
+                WHERE b.id = %s
+                """
+
+                mycur.execute(query, (int(a),))
+
+            # SEARCH BY NAME
             else:
 
-                print('Sorry, the Book is unavailable.')
-                print('.' * 85)
+                query = """
+                SELECT
+                    b.id,
+                    b.name,
+                    b.author,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM issued_books ib
+                            WHERE ib.book_id = b.id
+                            AND ib.return_date IS NULL
+                        )
+                        THEN 'Issued'
+                        ELSE 'Available'
+                    END
+                FROM books b
+                WHERE b.name LIKE %s
+                """
 
-        else:
+                mycur.execute(query, ('%' + a + '%',))
 
-            print("Please Enter Numeric IDs or type 'EXIT'")
-            print('.' * 85)
+            data = mycur.fetchall()
+
+            if data:
+
+                headers = ["ID", "BOOK NAME", "AUTHOR", "STATUS"]
+                widths = [10, 40, 40, 25]
+
+                print_rows(headers, data, widths)
+
+            else:
+                print("\nNo Book Found.")
+
+        except Error as e:
+            print("Error:", e)
+
+        line()
 
 
-# FUNCTION FOR RETURNING A BOOK
+# =========================================================
+# SEARCH USER
+# =========================================================
+
+def search_user():
+
+    heading("USER SEARCH MENU")
+
+    while True:
+
+        a = input(
+            "\nEnter User ID or User Name\n"
+            "*   -> Show All Users\n"
+            "$   -> Users Without Books\n"
+            "$$  -> Users With Books\n"
+            "EXIT -> Main Menu\n\n"
+            "Enter Choice : "
+        ).strip()
+
+        if a.upper() == "EXIT":
+            break
+
+        try:
+
+            # ALL USERS
+            if a == "*":
+
+                query = """
+                SELECT id, name, phone_number
+                FROM users
+                """
+
+                mycur.execute(query)
+
+            # USERS WITHOUT BOOKS
+            elif a == "$":
+
+                query = """
+                SELECT u.id, u.name, u.phone_number
+                FROM users u
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM issued_books ib
+                    WHERE ib.user_id = u.id
+                    AND ib.return_date IS NULL
+                )
+                """
+
+                mycur.execute(query)
+
+            # USERS WITH BOOKS
+            elif a == "$$":
+
+                query = """
+                SELECT DISTINCT
+                    u.id,
+                    u.name,
+                    u.phone_number
+                FROM users u
+                JOIN issued_books ib
+                    ON u.id = ib.user_id
+                WHERE ib.return_date IS NULL
+                """
+
+                mycur.execute(query)
+
+            # SEARCH BY ID
+            elif a.isdigit():
+
+                query = """
+                SELECT id, name, phone_number
+                FROM users
+                WHERE id = %s
+                """
+
+                mycur.execute(query, (int(a),))
+
+            # SEARCH BY NAME
+            else:
+
+                query = """
+                SELECT id, name, phone_number
+                FROM users
+                WHERE name LIKE %s
+                """
+
+                mycur.execute(query, ('%' + a + '%',))
+
+            data = mycur.fetchall()
+
+            if data:
+
+                headers = ["ID", "NAME", "PHONE NUMBER"]
+                widths = [10, 40, 20]
+
+                print_rows(headers, data, widths)
+
+            else:
+                print("\nNo User Found.")
+
+        except Error as e:
+            print("Error:", e)
+
+        line()
+
+
+# =========================================================
+# ISSUE BOOK
+# =========================================================
+
+def issue_book():
+
+    heading("ISSUE BOOK MENU")
+
+    while True:
+
+        book_id = input("\nEnter Book ID (EXIT to stop): ").strip()
+
+        if book_id.upper() == "EXIT":
+            break
+
+        user_id = input("Enter User ID : ").strip()
+
+        if user_id.upper() == "EXIT":
+            break
+
+        if not book_id.isdigit() or not user_id.isdigit():
+            print("Please Enter Valid Numeric IDs.")
+            line()
+            continue
+
+        try:
+
+            mycon.start_transaction()
+
+            # LOCK BOOK ROW
+            query = """
+            SELECT id
+            FROM books
+            WHERE id = %s
+            FOR UPDATE
+            """
+
+            mycur.execute(query, (int(book_id),))
+            book = mycur.fetchone()
+
+            if not book:
+                print("Book Does Not Exist.")
+                mycon.rollback()
+                line()
+                continue
+
+            # CHECK IF ALREADY ISSUED
+            query = """
+            SELECT 1
+            FROM issued_books
+            WHERE book_id = %s
+            AND return_date IS NULL
+            """
+
+            mycur.execute(query, (int(book_id),))
+
+            if mycur.fetchone():
+                print("Book Already Issued.")
+                mycon.rollback()
+                line()
+                continue
+
+            # CHECK USER
+            query = """
+            SELECT id
+            FROM users
+            WHERE id = %s
+            """
+
+            mycur.execute(query, (int(user_id),))
+            user = mycur.fetchone()
+
+            if not user:
+                print("User Does Not Exist.")
+                mycon.rollback()
+                line()
+                continue
+
+            issue_date = date.today()
+            due_date = issue_date + timedelta(days=LOAN_DAYS)
+
+            # ISSUE BOOK
+            query = """
+            INSERT INTO issued_books(
+                user_id,
+                book_id,
+                issue_date,
+                due_date
+            )
+            VALUES(%s, %s, %s, %s)
+            """
+
+            mycur.execute(
+                query,
+                (
+                    int(user_id),
+                    int(book_id),
+                    issue_date,
+                    due_date
+                )
+            )
+
+            mycon.commit()
+
+            print("\nBook Issued Successfully.")
+            print("Due Date:", due_date)
+
+        except Error as e:
+            mycon.rollback()
+            print("Error:", e)
+
+        line()
+
+
+# =========================================================
+# RETURN BOOK
+# =========================================================
+
 def return_book():
 
-    a = input('Enter Book ID : ')
+    heading("RETURN BOOK MENU")
 
     while True:
 
-        if a.upper() == 'EXIT':
+        book_id = input("\nEnter Book ID (EXIT to stop): ").strip()
+
+        if book_id.upper() == "EXIT":
             break
 
-        query = "select id from books where issued_to IS NOT NULL"
-        mycur.execute(query)
-        dt = mycur.fetchall()
+        if not book_id.isdigit():
+            print("Please Enter Valid Book ID.")
+            line()
+            continue
 
-        if a.isnumeric() and (int(a),) in dt:
+        try:
 
-            query = "update books set issued_to = NULL where id = {}".format(int(a))
-            mycur.execute(query)
-
-            query = "update users set books_assigned = NULL where books_assigned = {}".format(int(a))
-            mycur.execute(query)
-
-            mycon.commit()
-
-            print('The Book is Returned.')
-            break
-
-        else:
-
-            print('The Book was Not Issued.')
-            print('.' * 85)
-            a = input("Enter Book ID of an Issued Book : ")
-
-
-# FUNCTION FOR ADDING BOOKS
-def add_books():
-
-    while True:
-
-        nm = input('Enter Book Name : ').upper()
-
-        if nm.upper() == 'EXIT':
-            break
-
-        an = input('Enter Author Name : ').title()
-
-        if an.upper() == 'EXIT':
-            break
-
-        query = "insert into books(name, author) values('{}','{}')".format(nm, an)
-
-        mycur.execute(query)
-        mycon.commit()
-
-        print('Book Added Successfully.')
-        print('.' * 85)
-
-
-# FUNCTION FOR ADDING USERS
-def add_users():
-
-    while True:
-
-        nm = input('Enter User Name : ').capitalize()
-
-        if nm.upper() == 'EXIT':
-            break
-
-        pn = input('Enter Phone Number : ')
-
-        if pn.upper() == 'EXIT':
-            break
-
-        if pn.isnumeric() and len(pn) == 10:
+            mycon.start_transaction()
 
             query = """
-            insert into users(name, phone_number)
-            values('{}','{}')
-            """.format(nm, pn)
+            SELECT issue_id, due_date
+            FROM issued_books
+            WHERE book_id = %s
+            AND return_date IS NULL
+            FOR UPDATE
+            """
 
-            mycur.execute(query)
+            mycur.execute(query, (int(book_id),))
+            data = mycur.fetchone()
+
+            if not data:
+                print("Book Was Not Issued.")
+                mycon.rollback()
+                line()
+                continue
+
+            issue_id = data[0]
+            due_date = data[1]
+
+            today = date.today()
+
+            # UPDATE RETURN DATE
+            query = """
+            UPDATE issued_books
+            SET return_date = %s
+            WHERE issue_id = %s
+            """
+
+            mycur.execute(query, (today, issue_id))
+
             mycon.commit()
 
-            print('User Added Successfully.')
+            fine = 0
 
-        else:
+            if today > due_date:
+                days_late = (today - due_date).days
+                fine = days_late * FINE_PER_DAY
 
-            print('Please Enter Valid Phone Number.')
+            print("\nBook Returned Successfully.")
 
-        print('.' * 85)
+            if fine > 0:
+                print(f"Late Fine : ₹{fine}")
+
+        except Error as e:
+            mycon.rollback()
+            print("Error:", e)
+
+        line()
 
 
-# MAIN MENU
-def main_menu(n):
+# =========================================================
+# ADD BOOK
+# =========================================================
+
+def add_book():
+
+    heading("ADD BOOK MENU")
 
     while True:
 
-        if n == 1:
+        name = input("\nEnter Book Name (EXIT to stop): ").strip()
 
-            print('=' * 133)
-            print(' ' * 60, 'BOOK SEARCH MENU\n')
-
-            search_book()
-
-            print('=' * 133)
+        if name.upper() == "EXIT":
             break
 
-        elif n == 2:
+        if not name:
+            print("Book Name Cannot Be Empty.")
+            continue
 
-            print('=' * 133)
-            print(' ' * 60, 'USER SEARCH MENU\n')
+        author = input("Enter Author Name : ").strip()
 
-            search_user()
-
-            print('=' * 133)
+        if author.upper() == "EXIT":
             break
 
-        elif n == 3:
+        if not author:
+            print("Author Name Cannot Be Empty.")
+            continue
 
-            print('=' * 133)
-            print(' ' * 60, 'ISSUE BOOK MENU\n')
+        category = input("Enter Category : ").strip()
 
-            issue_book()
+        if not category:
+            print("Category Cannot Be Empty.")
+            continue
 
-            print('=' * 133)
+        try:
+
+            query = """
+            INSERT INTO books(name, author, category)
+            VALUES(%s, %s, %s)
+            """
+
+            mycur.execute(
+                query,
+                (
+                    name.title(),
+                    author.title(),
+                    category.title()
+                )
+            )
+
+            mycon.commit()
+
+            print("\nBook Added Successfully.")
+
+        except Error as e:
+            print("Error:", e)
+
+        line()
+
+
+# =========================================================
+# ADD USER
+# =========================================================
+
+def add_user():
+
+    heading("ADD USER MENU")
+
+    while True:
+
+        name = input("\nEnter User Name (EXIT to stop): ").strip()
+
+        if name.upper() == "EXIT":
             break
 
-        elif n == 4:
+        if not name:
+            print("User Name Cannot Be Empty.")
+            continue
 
-            print('=' * 133)
-            print(' ' * 60, 'RETURN BOOK MENU\n')
+        phone = input("Enter Phone Number : ").strip()
 
-            return_book()
-
-            print('=' * 133)
+        if phone.upper() == "EXIT":
             break
 
-        elif n == 5:
+        if not phone.isdigit() or len(phone) != 10:
+            print("Invalid Phone Number.")
+            line()
+            continue
 
-            print('=' * 133)
-            print(' ' * 60, 'ADD BOOKS MENU\n')
+        try:
 
-            add_books()
+            query = """
+            INSERT INTO users(name, phone_number)
+            VALUES(%s, %s)
+            """
 
-            print('=' * 133)
+            mycur.execute(
+                query,
+                (
+                    name.title(),
+                    phone
+                )
+            )
+
+            mycon.commit()
+
+            print("\nUser Added Successfully.")
+
+        except Error as e:
+            print("Error:", e)
+
+        line()
+
+
+# =========================================================
+# DELETE BOOK
+# =========================================================
+
+def delete_book():
+
+    heading("DELETE BOOK MENU")
+
+    book_id = input("\nEnter Book ID : ").strip()
+
+    if not book_id.isdigit():
+        print("Invalid Book ID.")
+        return
+
+    try:
+
+        # CHECK ACTIVE ISSUE
+        query = """
+        SELECT 1
+        FROM issued_books
+        WHERE book_id = %s
+        AND return_date IS NULL
+        """
+
+        mycur.execute(query, (int(book_id),))
+
+        if mycur.fetchone():
+            print("Cannot Delete. Book Is Currently Issued.")
+            return
+
+        query = """
+        DELETE FROM books
+        WHERE id = %s
+        """
+
+        mycur.execute(query, (int(book_id),))
+        mycon.commit()
+
+        if mycur.rowcount > 0:
+            print("Book Deleted Successfully.")
+        else:
+            print("Book Not Found.")
+
+    except Error as e:
+        print("Error:", e)
+
+    line()
+
+
+# =========================================================
+# DELETE USER
+# =========================================================
+
+def delete_user():
+
+    heading("DELETE USER MENU")
+
+    user_id = input("\nEnter User ID : ").strip()
+
+    if not user_id.isdigit():
+        print("Invalid User ID.")
+        return
+
+    try:
+
+        # CHECK ACTIVE ISSUE
+        query = """
+        SELECT 1
+        FROM issued_books
+        WHERE user_id = %s
+        AND return_date IS NULL
+        """
+
+        mycur.execute(query, (int(user_id),))
+
+        if mycur.fetchone():
+            print("Cannot Delete. User Has Issued Books.")
+            return
+
+        query = """
+        DELETE FROM users
+        WHERE id = %s
+        """
+
+        mycur.execute(query, (int(user_id),))
+        mycon.commit()
+
+        if mycur.rowcount > 0:
+            print("User Deleted Successfully.")
+        else:
+            print("User Not Found.")
+
+    except Error as e:
+        print("Error:", e)
+
+    line()
+
+
+# =========================================================
+# MAIN MENU
+# =========================================================
+
+def main_menu():
+
+    menu = {
+        "1": search_book,
+        "2": search_user,
+        "3": issue_book,
+        "4": return_book,
+        "5": add_book,
+        "6": add_user,
+        "7": delete_book,
+        "8": delete_user
+    }
+
+    while True:
+
+        heading("LIBRARY MANAGEMENT SYSTEM")
+
+        print("""
+1. Search Book
+2. Search User
+3. Issue Book
+4. Return Book
+5. Add Book
+6. Add User
+7. Delete Book
+8. Delete User
+9. Exit
+""")
+
+        choice = input("Enter Your Choice : ").strip()
+
+        if choice == "9":
             break
 
-        elif n == 6:
-
-            print('=' * 133)
-            print(' ' * 60, 'ADD USERS MENU\n')
-
-            add_users()
-
-            print('=' * 133)
-            break
+        elif choice in menu:
+            menu[choice]()
 
         else:
+            print("Invalid Choice.")
 
-            n = int(input('Please Enter Valid Choice : '))
+        pause()
 
 
-# MAIN PROGRAM
-while True:
+# =========================================================
+# START PROGRAM
+# =========================================================
 
-    print('=' * 133)
+if __name__ == "__main__":
 
-    print(' ' * 60, 'MAIN MENU')
+    try:
+        main_menu()
 
-    print(
-        'Hey, What would you like to do?\n'
-        ' [1] Search Book from Record\n'
-        ' [2] Search User from Record\n'
-        ' [3] Issue a Book\n'
-        ' [4] Return a Book\n'
-        ' [5] Add Books\n'
-        ' [6] Add Users\n'
-    )
+    finally:
 
-    print(' ' * 40, "** Type 'EXIT' anytime to stop **\n")
+        if mycur:
+            mycur.close()
 
-    n = input('Enter Desired Number Option : ')
+        if mycon:
+            mycon.close()
 
-    if n.upper() == 'EXIT':
-        break
-
-    elif n.isnumeric():
-
-        n = int(n)
-        main_menu(n)
-
-    else:
-
-        print('Please Enter Valid Option.')
-
-# CLOSE CONNECTION
-mycur.close()
-mycon.close()
-print("Connection Closed.")
+        print("\nDatabase Connection Closed.")
